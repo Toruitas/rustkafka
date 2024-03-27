@@ -140,49 +140,13 @@ async fn handle_connection(stream: TcpStream, producer:FutureProducer) {
     let topic = "some_topic_all_can_look_at";
     let group_id = "my_consumer_group";
 
-
-    // move the reader
-    tokio::spawn(async move {
-        let mut buf = vec![0; 1024];
-
-        // In a loop, read data from the socket and write the data back.
-        loop {
-            let n = reader
-                .read(&mut buf)
-                .await
-                .expect("failed to read data from socket");
-
-            if n == 0 {
-                return;
-            }
-
-            let produce_future = producer.send(
-                FutureRecord::to(&topic)
-                    .key("somekey")
-                    .payload(&buf),
-                    // .payload(&buf),
-                    // .timestamp(now()),
-                Duration::from_secs(1),
-            );
-
-            match produce_future.await {
-                Ok(delivery) => println!("Sent: {:?}", delivery),
-                Err((e, _)) => println!("Error: {:?}", e),
-            }
-
-            println!("Inserted into kafka topic {} {:?}", topic, buf);
-            // reset the buffer
-            buf = vec![0; 1024];
-        }
-    });
-
     let consumer: StreamConsumer = ClientConfig::new()
         .set("group.id", group_id)
         .set("bootstrap.servers", BOOTSTRAP_SERVERS)
         // .set("enable.partition.eof", "false")
         .set("session.timeout.ms", "6000")
         .set("enable.auto.commit", "false")
-        .set("auto.offset.reset", "earliest")
+        // .set("auto.offset.reset", "earliest")
         .set_log_level(RDKafkaLogLevel::Debug)
         .create()
         .expect("Consumer creation failed");
@@ -191,6 +155,9 @@ async fn handle_connection(stream: TcpStream, producer:FutureProducer) {
     consumer
         .subscribe(&[&topic])
         .expect("Can't subscribe to specified topic");
+
+    sleep(Duration::from_millis(10000)).await;
+
 
     // move the writer
     tokio::spawn(async move {
@@ -256,6 +223,47 @@ async fn handle_connection(stream: TcpStream, producer:FutureProducer) {
             //     }
             // };
         }
+    });
+
+
+    // move the reader
+    tokio::spawn(async move {
+        let mut buf = vec![0; 1024];
+
+        // In a loop, read data from the socket and write the data back.
+        loop {
+            let n = reader
+                .read(&mut buf)
+                .await
+                .expect("failed to read data from socket");
+
+            if n == 0 {
+                return;
+            }
+
+            let produce_future = producer.send(
+                FutureRecord::to(&topic)
+                    .key("somekey")
+                    .payload(&buf),
+                    // .payload(&buf),
+                    // .timestamp(now()),
+                Duration::from_secs(1),
+            );
+
+            match produce_future.await {
+                Ok(delivery) => println!("Sent: {:?}", delivery),
+                Err((e, _)) => println!("Error: {:?}", e),
+            }
+
+            println!("Inserted into kafka topic {} {:?}", topic, buf);
+            // reset the buffer
+            buf = vec![0; 1024];
+        }
+    });
+
+    
+
+    
 
         // loop {
         //     for ms in consumer.iter(){
@@ -311,7 +319,6 @@ async fn handle_connection(stream: TcpStream, producer:FutureProducer) {
 
         //     sleep(Duration::from_millis(1)).await;
         // }
-    });
 }
 
 // https://v0-1--tokio.netlify.app/docs/getting-started/echo/
